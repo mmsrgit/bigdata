@@ -1,0 +1,361 @@
+mysql -h ms.itversity.com -u retail_user -p
+1) select o.*, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id group by o.order_id,o.order_date, o.order_customer_id, o.order_status;
+
+2) select o.order_date, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id where o.order_date like '2013-08%' group by o.order_date
+
+sqoop list-databases \
+ --connect  jdbc:mysql://ms.itversity.com:3306 \
+ --username retail_user \
+ --password itversity
+
+
+sqoop list-tables \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity
+
+ sqoop eval \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --query "SELECT * FROM ORDER_ITEMS LIMIT 10"
+
+
+ sqoop eval \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+  --username retail_user \
+  --password itversity \
+  --query "CREATE TABLE dummy (i INT)";
+
+  sqoop eval \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+  --username retail_user \
+  --password itversity \
+  --query "INSERT INTO dummy VALUES (20)";
+
+sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --table order_items \
+  --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db
+  --num-mappers 1
+
+
+sqoop import \
+  -Dorg.apache.sqoop.splitter.allow_text_splitter=true \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --table orders \
+  --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
+  --split-by order_status
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user --password itversity \
+ --password itversity \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_revenue \
+ --num-mappers 2 \
+ --query "select o.*, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id and \$CONDITIONS group by o.order_id,o.order_date, o.order_customer_id, o.order_status" \
+ --split-by order_id
+
+Delimiters and handling nulls
+------------------------------
+
+sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/hr_db \
+  --username hr_user \
+  --password itversity \
+  --table employees \
+  --warehouse-dir /user/maruthi_rao2000/sqoop_import/hr_db \
+  --null-non-string -1 \
+  --fields-terminated-by "\t" \
+  --lines-terminated-by ":"
+
+Incremental Imports
+-------------------
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user --password itversity \
+ --password itversity \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders \
+ --num-mappers 2 \
+ --query "select * from orders where \$CONDITIONS and order_date like '2013-%'" \
+ --split-by order_id
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user --password itversity \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders \
+ --num-mappers 2 \
+ --query "select * from orders where \$CONDITIONS and order_date like '2014-01%'" \
+ --split-by order_id \
+ --append
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user --password itversity \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders \
+ --num-mappers 2 \
+ --table orders \
+ --where "order_date like '2014-02%'" \
+ --append
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user --password itversity \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders \
+ --num-mappers 2 \
+ --table orders \
+ --check-column order_date \
+ --incremental append \
+ --last-value '2014-02-28'
+
+Hive
+----
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table order_items \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table order_items \
+ --num-mappers 2 
+
+
+Hive Managing tables
+--------------------
+Default behaviour - creates the table while hive import.
+
+If we run the same sqoop import with hive-import twice it will append the data.
+If we have to create new snapshot every time without appending we need to specify --hive-overwrite control argument. Basically, it will recreate the table and create again.
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table order_items \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table order_items \
+ --hive-overwrite \
+ --num-mappers 2
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table orders \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table orders \
+ --hive-overwrite \
+ --num-mappers 2
+
+If we want a scenario where in it has to fail if the table already exists, there is a confusing argument which is --create-hive-table. This is mutually exclusive with --hive-overwrite.
+This errors out after the sqoop import command copies the data in to temporary location. So the data with table name folder remains in /user/maruthi_rao2000 location. 
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table order_items \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table order_items \
+ --create-hive-table \
+ --num-mappers 2
+ 
+When importing to hive, if we have to override column datatype mappings when data is copying from mySql to Hive tables, we use --map-column-hive
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table order_items \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table order_items \
+ --hive-overwrite \
+ --map-column-hive order_item_id=STRING \
+ --num-mappers 2
+
+Import all tables
+------------------
+
+sqoop import-all-tables \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
+ --autoreset-to-one-mapper
+
+
+
+Create table in hive using data from other tables
+-------------------------------------------------
+
+CREATE TABLE daily_revenue_maruthi(
+    order_date varchar(30) primary key,
+    revenue float
+);
+
+create table daily_revenue as
+select o.order_date, sum(oi.order_item_subtotal) order_revenue 
+from orders o join order_items oi on 
+o.order_id = oi.order_item_order_id 
+where o.order_date like '2013-07%' 
+group by o.order_date;
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi \
+ --m 1 \
+ --input-fields-terminated-by "\001"
+
+
+In the below query we had to give --target-dir though it is not required. Not sure why it is expecting.
+
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table daily_revenue \
+ --num-mappers 1 \
+ --query "select o.order_date,sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id where \$CONDITIONS and o.order_date like '2013-08%' group by o.order_date" \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/daily_revenue
+
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi \
+ --input-fields-terminated-by "\001" \
+ --m 1
+
+CREATE TABLE daily_revenue_maruthi_demo(
+    revenue float,
+    order_date varchar(30),
+    description varchar(20)
+);
+
+below command fails as columns structure is different in source and destination tables.
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi_demo \
+ --input-fields-terminated-by "\001" \
+ --m 1
+
+so add columns argument. It specifies order of columns in destination table for forming insert queries.
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi_demo \
+ --columns order_date,revenue \
+ --input-fields-terminated-by "\001" \
+ --m 1
+
+update
+-------
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi \
+ --m 1 \
+ --update-key order_date \
+ --input-fields-terminated-by "\001"
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi \
+ --m 1 \
+ --update-key order_date \
+ --input-fields-terminated-by "\001"
+
+insert into daily_revenue 
+select o.order_date, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id  group by o.order_date;
+
+create stage table
+------------------
+
+CREATE TABLE daily_revenue_maruthi_stage(
+    order_date varchar(30) primary key,
+    revenue float
+);
+
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi \
+ --input-fields-terminated-by "\001" \
+ --staging-table daily_revenue_maruthi_stage
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue \
+ --table daily_revenue_maruthi \
+ --input-fields-terminated-by "\001" \
+ --staging-table daily_revenue_maruthi_stage \
+ --clear-staging-table
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

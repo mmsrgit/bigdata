@@ -1,0 +1,262 @@
+ Flume
+
+ // 120 Flume - Getting Started
+
+   //Configuring Flume - We give the properties in a file and pass that file path in "flume-ng agent" command as below
+   
+   flume-ng agent --name a1
+
+
+ // 121 
+
+
+  //Command to start flume agent
+
+  flume-ng agent -n wh -f /home/maruthi_rao2000/flume_demo/wslogstohdfs/wshdfs.conf --conf /etc/flume/conf
+
+  -n or --name
+  -f or --conf-file
+
+ ################ example conf file #######################
+
+ # example.conf: A single-node Flume configuration
+# Name the components on this agent
+wh.sources = ws
+wh.sinks = hd
+wh.channels = mem
+
+# Describe/configure the source
+wh.sources.ws.type = exec
+wh.sources.ws.command = tail -F /opt/gen_logs/logs/access.log
+
+# Describe the sink
+wh.sinks.hd.type = hdfs
+wh.sinks.hd.hdfs.path = hdfs://nn01.itversity.com:8020/user/maruthi_rao2000/flume_demo
+wh.sinks.hd.hdfs.rollInterval = 30
+wh.sinks.hd.hdfs.rollSize = 0
+wh.sinks.hd.hdfs.rollCount = 0
+wh.sinks.hd.hdfs.fileType = DataStream
+wh.sinks.hd.hdfs.filePrefix = FlumeDemo
+
+# Use a channel which buffers events in memory
+wh.channels.mem.type = memory
+wh.channels.mem.capacity = 1000
+wh.channels.mem.transactionCapacity = 100
+
+# Bind the source and sink to the channel
+wh.sources.ws.channels = mem
+wh.sinks.hd.channel = mem
+
+###################### end conf file ########################
+
+If we do not give "wh.sinks.hd.hdfs.fileType = DataStream" property "wc -l" is not possible
+Above configuration creates file every 30 seconds
+
+
+  // 126 Flume - Web Server logs to HDFS - Deep dive to memory channel
+  
+  // 127 Kafka - Getting Started - High Level Architecture
+
+  // 128 Produce and consume messages using commands
+
+  //start the topic
+
+  kafka-topics.sh --create \
+  --zookeeper nn01.itversity.com:2181,nn02.itversity.com:2181,rm01.itversity.com:2181 \
+  --replication-factor 1 \
+  --partitions 1 \
+  --topic kafkademommsr
+  
+
+  // to list the topic which we have created
+
+  kafka-topics.sh --list \
+  --zookeeper nn01.itversity.com:2181,nn02.itversity.com:2181,rm01.itversity.com:2181 \
+  --topic kafkademommsr
+
+  // to list all topics
+  kafka-topics.sh --list \
+  --zookeeper nn01.itversity.com:2181,nn02.itversity.com:2181,rm01.itversity.com:2181
+
+  // send messages
+  kafka-console-producer.sh \
+  --broker-list wn01.itversity.com:6667,wn02.itversity.com:6667,wn03.itversity.com:6667 \
+  --topic kafkademommsr
+
+  // start a consumer
+  kafka-console-consumer.sh \
+  --bootstrap-server wn01.itversity.com:6667,wn02.itversity.com:6667,wn03.itversity.com:6667 \
+  --topic kafkademommsr \
+  --from-beginning
+
+
+  // 129. Anatomy of a topic
+
+  // 130. Flume and Kafka in Streaming analytics
+
+  // 131. Spark Streaming - Getting started.
+
+    // Creation of Spartk Streaming Context in spark-shell
+
+    sc.stop
+
+    import org.apache.spark.SparkConf
+    import org.apache.spark.streaming._
+
+    val conf = new SparkConf().setAppName("streaming").setMaster("yarn-client")
+    val ssc = new StreamingContext(conf,Seconds(10))
+
+  // 132 Spark Streaming - setting up netcat
+
+  // 133 Develop word count program
+
+  // 134 Spark Streaming - Ship and run word count program on the cluster
+
+  scp target/scala-2.10/retail_2.10-0.1.jar maruthi_rao2000@gw03.itversity.com:/home/maruthi_rao2000
+
+  *********** Start the webservice before issuing spark submit command ***************
+
+  // Open seperate terminal and connect to lab. Give following command which starts the web service
+
+  nc -lk gw03.itversity.com 9999
+
+  // In another session execute following command to run StreamingContext and listen for every 10 seconds
+
+  spark-submit 
+   --class StreamingWordCount 
+   --master yarn 
+   --conf spark.ui.port=14623 
+   retail_2.10-0.1.jar yarn-client gw03.itversity.com 9999
+
+   
+   To come out of telnet we should enter Ctrl + ], then quit
+
+
+   // 135 Spark Streaming - Data Structures (DStream) and APIs overview
+
+     // Window operations
+
+   // 136 Spark Streaming - Get department wise traffic - Problem Statement
+
+   // Scala has triple quoted strings """String\nString""" to use special characters in the string without escaping.
+
+
+   // 137 Development
+
+   // 138 Run on the cluster
+
+   ********************* start the webservice - While starting the webservice itself we can pipe the logs to the webservice in following way
+
+   tail_logs.sh|nc -lk gw03.itversity.com 8156
+
+   // to validate the webservice give following command in another session
+
+   telnet gw03.itversity.com 8156
+
+  spark-submit 
+   --class StreamingDepartmentCount
+   --master yarn 
+   --conf spark.ui.port=14623 
+   retail_2.10-0.1.jar yarn-client gw03.itversity.com 8156
+
+
+   // 139 Flume and Spark Streaming
+
+   cd flume_demo/
+   mkdir strdeptcnt
+   cp wslogstohdfs/wshdfs.conf strdeptcnt/strFlSp.conf
+
+   //edit the file, multiplexing flume mode.
+   // spark <version> + Flume integration user guide, gives the details
+
+   // 141 Department wise Traffic
+
+   // The difference between DepartmentCount and this program is that, earlier the program polled the netcat server. Here Spark streaming uses a reliable Flume sink as receiver. It uses FlumeUtils class to read the data.
+
+    // Flume agent is configured to send data by having the following in the configuration file.
+
+    agent.sinks = spark
+    agent.sinks.spark.type = org.apache.spark.streaming.flume.sink.SparkSink
+    agent.sinks.spark.hostname = <hostname of the local machine>
+    agent.sinks.spark.port = <port to listen on for connection from Spark>
+    agent.sinks.spark.channel = memoryChannel
+
+    // in our configuration file
+    str.sinks.spark.type = org.apache.spark.streaming.flume.sink.SparkSink
+    str.sinks.spark.hostname = gw03.itversity.com
+    str.sinks.spark.port = 8156
+
+    // In the program, we have to convert the Flume proprietary format to text in the following way
+    import org.apache.spark.streaming.flume._
+    val flumeStream = FlumeUtils.createPollingStream(streamingContext, [chosen machine's hostname], [chosen port])
+    val messages = flumeStream.map(msg => new String(msg.event.getBody.array()))
+
+    // run the program
+
+    // First run the flume agent
+
+    flume-ng agent -n str -f /home/maruthi_rao2000/flume_demo/strdeptcnt/strFlSp.conf --conf /etc/flume/conf
+
+    spark-submit \
+      --class FlumeStreamingDepartmentCount \
+      --conf spark.ui.port=14623 \
+      --master yarn \
+      --jars "/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume-sink_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/flume/lib/commons-lang3-3.5.jar,/usr/hdp/2.6.5.0-292/flume/lib/flume-ng-sdk-1.5.2.2.6.5.0-292.jar" \
+      retail_2.10-0.1.jar yarn-client gw03.itversity.com 8156
+
+      spark-submit --class FlumeStreamingDepartmentCount --conf spark.ui.port=14623 --master yarn --jars "/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume-sink_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/flume/lib/commons-lang3-3.5.jar,/usr/hdp/2.6.5.0-292/flume/lib/flume-ng-sdk-1.5.2.2.6.5.0-292.jar" retail_2.10-0.1.jar yarn-client gw03.itversity.com 8156
+
+     // we explicitly add jars in spark-submit as the worker nodes in which it is executing need to be aware of jars. The program which creates the executors, will also copy these jars on to those executors.  
+
+
+     // 143 Flume and Kafka integration
+
+     // We will make use of wslogstohdfs/wshdfs.conf to create flume-kafka integration
+
+     // we need to get the information of kafka brokerList property in flume agent configuration, from Ambari
+
+     Kafka -> Configs -> check host names and ports
+
+     // Following are the properties in agent file
+
+     # Describe the kafka sink
+     wk.sinks.kafka.type = org.apache.flume.sink.kafka.KafkaSink
+     wk.sinks.kafka.brokerList = wn01.itversity.com:6667,wn02.itversity.com:6667,wn03.itversity.com:6667,wn04.itversity.com:6667
+     wk.sinks.kafka.topic = fkdemommsr
+
+     // 144 Run and Integrate
+
+     flume-ng agent -n wk -f /home/maruthi_rao2000/flume_demo/wslogstokafka/wskafka.conf --conf /etc/flume/conf
+
+
+     // To validate we can issue below command
+
+     kafka-console-consumer.sh   --bootstrap-server wn01.itversity.com:6667,wn02.itversity.com:6667,wn03.itversity.com:6667   --topic fkdemommsr  --from-beginning
+
+     // 145 Kafka and spark streaming
+
+     // 146 Develop and build application
+
+     // 147 Run and validate
+
+     spark-submit --class KafkaStreamingDepartmentCount \
+     --conf spark.ui.port=14623 \
+     --master yarn \
+     --jars "/usr/hdp/2.5.0.0-1245/kafka/libs/kafka_2.10-0.8.2.1.jar,/usr/hdp/2.5.0.0-1245/kafka/libs/spark-streaming-kafka_2.10-1.6.2.jar,/usr/hdp/2.6.5.0-292/kafka/libs/metrics-core-2.2.0.jar"\
+     retail_2.10-0.1.jar yarn-client  
+
+
+
+
+
+
+   
+
+
+
+
+
+
+ 
+
+
