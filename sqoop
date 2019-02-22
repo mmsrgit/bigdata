@@ -49,7 +49,7 @@ sqoop import \
   --password itversity \
   --table orders \
   --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
-  --split-by order_status
+  --split-by order_status 
 
 sqoop import \
  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \

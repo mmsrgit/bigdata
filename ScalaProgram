@@ -1,0 +1,44 @@
+import org.apache.spark.SparkConf
+import org.apache.spark.SparkContext
+
+object DailyRevenue{
+
+ def main(args: Array[String]) = {
+
+  val conf = new SparkConf().setAppName("Daily Revenue").setMaster(args(3))
+  val sc = new SparkContext(conf)
+
+  val baseDir = args(0)
+  val orders = sc.textFile(baseDir+"orders")
+  val orderItems = sc.textFile(baseDir+"order_items")
+  
+  val ordersFilter = orders.filter(rec => rec.split(",")(3) == "COMPLETE" || rec.split(",")(3) == "CLOSED")
+
+  val ordersMap = ordersFilter.map(rec => (rec.split(",")(0).toInt, rec.split(",")(1).substring(0,10)))
+
+  val orderItemsMap = orderItems.map(rec => (rec.split(",")(1).toInt, (rec.split(",")(2).toInt, rec.split(",")(4).toFloat)))
+
+  val joinedOrders = ordersMap.join(orderItemsMap)
+  val joinedOrdersMap = joinedOrders.map(rec => ((rec._2._1, rec._2._2._1),rec._2._2._2))
+  val dailyRevenuePerProductId = joinedOrdersMap.reduceByKey((total, dailyRevenue) => total+dailyRevenue )
+  
+  import scala.io.Source
+  val productsRaw = Source.fromFile(args(1)).getLines.toList
+
+  val products = sc.parallelize(productsRaw)
+
+  val productsMap = products.map(rec => (rec.split(",")(0).toInt,rec.split(",")(2)))
+
+  val dailyRevenuePerProductIdMap = dailyRevenuePerProductId.map(rec => (rec._1._2,(rec._1._1, rec._2)))
+
+  val dailyRevenuePerProductJoin = dailyRevenuePerProductIdMap.join(productsMap)
+  val dailyRevenuePerProductSorted = dailyRevenuePerProductJoin.map( rec => ((rec._2._1._1, -rec._2._1._2),(rec._2._1._1, rec._2._1._2, rec._2._2)) )
+  .sortByKey()
+
+  val dailyRevenuePerProduct = dailyRevenuePerProductSorted.map(rec => rec._2._1 + "," + rec._2._3 + "," + rec._2._3)
+
+  dailyRevenuePerProduct.saveAsTextFile(args(2))
+ }
+}
+
+/Users/RAMA/Documents/data/retail_db/ /Users/RAMA/Documents/data/retail_db/products/part-00000 /Users/RAMA/Documents/data/retail_db/daily_revenue_txt_scala local

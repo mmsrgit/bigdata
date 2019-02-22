@@ -1,0 +1,129 @@
+Metacharacters
+---------------
+
+The metacharacters supported by this API are: <([{\^-=$!|]})?*+.>
+
+To force a metacharacter to be treated as an ordinary character:
+ precede the metacharacter with a backslash
+
+[] : used to enclose regex pattern
+^  : negation
+-  : range
+
+
+
+
+
+
+Enter your regex: [bcr]at
+Enter input string to search: bat
+I found the text "bat" starting at index 0 and ending at index 3.
+
+Enter your regex: [bcr]at
+Enter input string to search: hat
+No match found.
+
+
+Enter your regex: [^bcr]at
+Enter input string to search: bat
+No match found.
+
+Ranges
+------
+
+Enter your regex: [a-c]
+Enter input string to search: a
+I found the text "a" starting at index 0 and ending at index 1.
+
+
+Enter your regex: foo[1-5]
+Enter input string to search: foo5
+I found the text "foo5" starting at index 0 and ending at index 4.
+
+Unions
+------
+Enter your regex: [0-4[6-8]]
+Enter input string to search: 8
+I found the text "8" starting at index 0 and ending at index 1.
+
+
+intersections
+-------------
+Enter your regex: [2-8&&[4-6]]
+Enter input string to search: 4
+I found the text "4" starting at index 0 and ending at index 1.
+
+
+Enter your regex: [0-9&&[^345]]
+Enter input string to search: 2
+I found the text "2" starting at index 0 and ending at index 1.
+
+
+.	Any character (may or may not match line terminators)
+\d	A digit: [0-9]
+\D	A non-digit: [^0-9]
+\s	A whitespace character: [ \t\n\x0B\f\r]
+\S	A non-whitespace character: [^\s]
+\w	A word character: [a-zA-Z_0-9]
+\W	A non-word character: [^\w]
+
+\d matches all digits
+\s matches spaces
+\w matches word characters
+Alternatively, a capital letter means the opposite:
+
+\D matches non-digits
+\S matches non-spaces
+\W matches non-word characters
+
+
+
+Enter your regex: \W
+Enter input string to search: a
+No match found.
+
+Enter your regex: \W
+Enter input string to search: !
+I found the text "!" starting at index 0 and ending at index 1.
+
+
+Greedy	Reluctant	Possessive	Meaning
+X?	X??		X?+		X, once or not at all
+X*	X*?		X*+		X, zero or more times
+X+	X+?		X++		X, one or more times
+X{n}	X{n}?		X{n}+		X, exactly n times
+X{n,}	X{n,}?		X{n,}+		X, at least n times
+X{n,m}	X{n,m}?		X{n,m}+		X, at least n but not more than m times
+
+
+Greedy quantifiers are considered "greedy" because they force the matcher to read in, or eat, the entire input string prior to attempting the first match. If the first match attempt (the entire input string) fails, the matcher backs off the input string by one character and tries again, repeating the process until a match is found or there are no more characters left to back off from. Depending on the quantifier used in the expression, the last thing it will try matching against is 1 or 0 characters.
+
+The reluctant quantifiers, however, take the opposite approach: They start at the beginning of the input string, then reluctantly eat one character at a time looking for a match. The last thing they try is the entire input string.
+
+Finally, the possessive quantifiers always eat the entire input string, trying once (and only once) for a match. Unlike the greedy quantifiers, possessive quantifiers never back off, even if doing so would allow the overall match to succeed.
+
+
+----------------------------------------------------------------------------
+
+
+
+Enter your regex: .*foo  // greedy quantifier
+Enter input string to search: xfooxxxxxxfoo
+I found the text "xfooxxxxxxfoo" starting at index 0 and ending at index 13.
+
+Enter your regex: .*?foo  // reluctant quantifier
+Enter input string to search: xfooxxxxxxfoo
+I found the text "xfoo" starting at index 0 and ending at index 4.
+I found the text "xxxxxxfoo" starting at index 4 and ending at index 13.
+
+Enter your regex: .*+foo // possessive quantifier
+Enter input string to search: xfooxxxxxxfoo
+No match found.
+
+
+
+
+
+
+
+

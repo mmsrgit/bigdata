@@ -1,0 +1,54 @@
+ scala.util.matching.Regex
+ scala.util.matching.Regex.MatchIterator
+ scala.util.matching.Regex.Groups
+
+ Scala has triple quoted strings """String\nString""" to use special characters in the string without escaping.
+
+ val regex = """\d+""".r
+  scala.util.matching.Regex
+
+ val pattern = regex.pattern
+  java.util.regex.Pattern
+
+ val match = pattern.matcher("")
+  java.util.regex.Matcher
+
+ regex.findFirstIn(str)
+  Option[String]
+
+ regex.findAllMatchIn(str)
+  Iterator[scala.util.matching.Regex.Match]
+
+ regex.replaceAllIn
+
+  def replaceAllIn(target: CharSequence, replacement: String): String               
+  def replaceAllIn(target: CharSequence, replacer: Regex.Match => String): String   
+
+
+
+
+
+ val exp = """.+?/department/(.+?)/.+?""".r
+ or
+ val exp = ".+?\\/department\\/(.+?)\\/.+?".r  
+
+ val string = "[13/Jan/2019:18:14:03 -0800] \"GET /department/footwear/categories HTTP/1.1\" 200 1958"
+ val exp = """.+?/department/(.+?)/.+?""".r
+ val matching= exp.pattern.matcher(string)
+ matching.matches
+ matching.group(1)
+
+
+ val string = "22.188.114.152 - - [13/Jan/2019:18:14:03 -0800] \"GET /department/footwear/categories HTTP/1.1\" 200 1958 \"-\" \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36\""
+ val exp = """.+?/department/(.+?)/.+?""".r
+ val matching= exp.pattern.matcher(string)
+ matching.matches
+ matching.group(1)
+
+ exp.pattern.matcher(string).group(1)
+
+
+ val filtered = rdd.filter(rec => exp.pattern.matcher(rec).matches)
+
+ val filtered = rdd.filter(rec => """.+?/department/(.+?)/.+?""".r.pattern.matcher(rec).matches)
+

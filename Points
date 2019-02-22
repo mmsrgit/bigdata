@@ -1,0 +1,97 @@
+config files  are at location - /etc/hadoop/conf
+
+core-site.xml - fs.defaultFs gives name node URI
+
+<property>
+      <name>fs.defaultFS</name>
+      <value>hdfs://nn01.itversity.com:8020</value>
+      <final>true</final>
+    </property>
+
+50070 - most likely the name node port will be this
+so the name node URL will be http://nn01.itversity.com:50070
+
+hdfs-site.xml
+
+<property>
+      <name>dfs.namenode.http-address</name>
+      <value>172.16.1.101:50070</value>
+    </property>
+
+
+50070 - name node UI runs on this port
+
+
+du -sh //command to know the size of folder
+hadoop fs -du -s -h
+
+//to get the details of hdfs locations
+
+hdfs fsck /user/maruthi_rao2000/crime -files -blocks -location
+
+
+yarn-site.xml
+
+    <property>
+      <name>yarn.resourcemanager.address</name>
+      <value>rm01.itversity.com:8050</value>
+    </property>
+
+    <property>
+      <name>yarn.resourcemanager.webapp.address</name>
+      <value>rm01.itversity.com:19288</value>
+    </property>
+
+// If we want to get memory taken by spark jobs, details will be in /etc/spark/conf/spark-env.sh
+
+#SPARK_EXECUTOR_CORES="1" #Number of cores for the workers (Default: 1).
+#SPARK_EXECUTOR_MEMORY="1G" #Memory per Worker (e.g. 1000M, 2G) (Default: 1G)
+
+
+// to display number of lines
+
+wc -l file.txt
+Total number of files: hadoop fs -ls /path/to/hdfs/* | wc -l
+Total number of lines: hadoop fs -cat /path/to/hdfs/* | wc -l
+Total number of lines for a given file: hadoop fs -cat /path/to/hdfs/filename | wc -l
+
+//sqoop connect will work only if relevant jars are present below location
+/usr/hdp/current/sqoop-client/lib
+
+--append 
+--where "dpt_id >10"
+
+(or)
+
+--incremental append
+--check-column dpt_id
+--last-value 10
+
+
+To see compression algorithms supported, check in /etc/hadoop/conf/core-site.xml
+
+<property>
+    <name>io.compression.codecs</name>
+    <value>org.apache.hadoop.io.compress.GzipCodec,org.apache.hadoop.io.compress.DefaultCodec,org.apache.hadoop.io.compress.SnappyCodec</value>
+</property>
+
+
+// If we have to import only those rows from table which has order_id > 50000 we use --boundary-query
+
+sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --table orders \
+  --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
+  --boundary-query "select min(order_id), max(order_id) from orders where order_id > 50000"
+
+// If we are using custom query like with joins, we cannot give --num-mappers without giving --split-by
+
+// If we use --query we must put 'and \$CONDITIONS' in the query
+
+// --table and --columns are mutually exclusive
+
+
+sqoop export --connect jdbc:mysql://ms.itversity.com:3306/retail_export --username retail_user --password itversity --export-dir hdfs://nn01.itversity.com:8020/apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue --table daily_revenue_mmsr --input-fields-terminated-by "\001" --m 1
+

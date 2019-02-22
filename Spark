@@ -1,0 +1,429 @@
+Spark
+
+The closure is those variables and methods which must be visible for the executor to perform its computations on the RDD 
+
+collect() method brings the RDD to driver node. For e.g. rdd.collect().foreach(println). This can cause the driver to run out of memory. Safer approach is to use take():
+rdd.take(100).foreach(println)
+
+
+
+launching spark shell
+----------------------
+
+
+
+spark-shell --master yarn \
+  --conf spark.ui.port=14623
+
+  port number should be 5 digit in range 10000 to 65535
+
+hadoop fs -ls /public/retail_db
+
+hadoop fs -ls /public/retail_db
+
+
+spark-shell --master yarn \
+  --conf spark.ui.port=14623 \
+  --num-executors 1 \
+  --executor-memory 512M
+
+spark-shell --master yarn --conf spark.ui.port=14666 --executor-memory 512M --num-executors 1
+
+
+Initiate spark context programatically
+--------------------------------------
+
+import apache.spark.{SparkConf, SparkContext}
+val conf = new SparkConf().setAppName("Revenue").setMaster("yarn-client")
+val sc = new SparkContext(conf)
+
+
+sc.getConf.getAll.foreach(println)
+
+
+val orders = sc.textFile("/public/retail_db/orders")
+val orderItems = sc.textFile("/public/retail_db/order_items")
+
+orders.first
+orders.take(10)
+//Above statement converts first 10 records to colleciton - Array[String]
+
+Transformations are lazy evaluations. Scala does not execute directly. It will create DAG - directed acyclic graph.
+
+To see whether DAG has been created properly, we run an API called toDebugString.
+
+To better illustrate this, if we have performed a transformation we do not see a job created in tracking URL. We see that only after action being performed.
+
+67. Row Level Transformations
+
+val str = orders.first
+val date = str.split(",")(1).substring(0,10).replaceAll("-","").toInt
+
+val orderDates = orders.map( (str: String) => {
+     str.split(",")(1).substring(0,10).replaceAll("-","").toInt
+     })
+
+val orderDateTuples = orders.map(str => (str.split(",")(0).toInt, str.split(",")(1).substring(0,10).replaceAll("-","").toInt)
+val orderItemTuples = orderItems.map(str => (str.split(",")(1).toInt , str))
+
+68. Row Level Transformations using flatMap
+
+val l = List("Hello","How are you", "let us do it again", "word count program", "we will see how many times each word repeat")
+val l_rdd = sc.parallelize(l)
+val l_map = l_rdd.map(ele => ele.split(" "))
+val l_flatMap = l_rdd.flatMap(ele => ele.split(" "))
+
+sc.parallelize(l).flatMap(str => str.toLowerCase.split(" ")).map(str => (str,1)).countByKey.foreach(println)
+
+69. Filtering the data
+
+val filteredOrders = orders.filter( str => str.contains("COMPLETED") || str.contains("CLOSED") && str.split(",")(1).substring(0,7) == "2013-09")
+
+val filteredOrders = orders.filter( str => str.contains("COMPLETED") || str.contains("CLOSED") && str.contains("2013-09"))
+
+If we want to see all statuses present in the dataset we can use distinct as below
+
+orders.map(str => str.split(",")(3)).distinct.collect.foreach(println)
+
+70. Joining data sets - Inner Join
+
+//Join Orders and OrderItems
+
+(K,V) -> order_id and order_date
+(K,W) -> order_id and order_subtotal
+
+val orderTuples = orders.map(order => (order.split(",")(0).toInt, order.split(",")(1).substring(0,10)))
+val orderItemsTuples = orderItems.map(orderItem => (orderItem.split(",")(1).toInt, orderItem.split(",")(4).toFloat))
+
+val joinedOrders = orderTuples.join(orderItemsTuples)
+
+71. Joining data sets - Outer Joins
+val orders = sc.textFile("/public/retail_db/orders").map(str => (str.split(",")(0).toInt, str.split(",")(1).substring(0,10)))
+val orderItems = sc.textFile("/public/retail_db/order_items").map(str => (str.split(",")(1).toInt, str.split(",")(4).toFloat))
+
+problem statement : Get all the orders which do not have entries in orderItems
+
+Left outer join will have either Some() or None from the right table corresponding to matched or not matched condition.
+
+val ljOrders = orders.leftOuterJoin(orderItems)
+
+For the problem defined, we need to extract all None records
+We need to filter the dataset after left join
+
+if tuple, val t = (1,2)  then t._1 denotes 1 and t._2 denotes 2
+
+
+val noOrders = ljOrders.filter(t => t._2._2 == None) will give all records in orders which do not have relation in orderItems
+val ordersWithNoOrderItems = noOrders.map(noOrders => noOrders._2._1)
+
+// Aggregations - Global using actions
+
+Count the records for each status in Orders table
+orders.map(str => (str.split(",")(3),1)).countByKey.foreach(println)
+Above computation is not aggregation
+
+problem: compute revenue for the month of September
+
+max revenue - 
+
+val orderItemsRevenue = orderItems.map(oi => oi.split(",")(4).toFloat)
+
+// Get Revenue for order_id and 
+//get data in descending order by order_item_subtotal for each order_id
+
+val orderItemsMap = orderItems.map(oi => (oi.split(",")(1).toInt,oi.split(",")(4).toFloat))
+val orderItemsGBK = orderItemsMap.groupByKey
+
+orderItemsGBK is of type org.apache.spark.rdd.RDD[(Int, Iterable[Float])]
+ e.g. (29270,CompactBuffer(299.95, 119.98, 399.98, 159.96, 399.98))
+
+To get revenue by orderId
+
+val orderRevenue = orderItemsGBK.map(rec => (rec._1,rec._2.sum))
+
+To display order revenues for each order_id in ascending/descending order.
+
+val orderItemsSorted = orderItemsGBK.map(rec => (rec._1, rec._2.toList.sorted))
+val orderItemsSortedDesc = orderItemsGBK.map(rec => (rec._1, rec._2.toList.sortBy(o => -o)))
+
+
+To display order revenues for each order_id in ascending/descending order in the form of tuples
+
+val orderItemsSortedTuples = orderItemsGBK.flatMap(rec => rec._2.toList.sorted.map(rev => (rec._1,rev)))
+val orderItemsSortedDescTuples = orderItemsGBK.flatMap(rec => rec._2.toList.sortBy(o => -o).map(rev => (rec._1,rev)))
+
+76 // Aggregations - reduceByKey
+
+Find total revenue for each order_id
+val orderItemsTotalRevenue = orderItemsMap.reduceByKey((total,revenue) => total + revenue)
+
+Find minimum revenue for each order_id
+val orderItemsMin = orderItemsMap.reduceByKey((min,revenue) => if(min>revenue) revenue else min)
+
+if we have to compute sorted tuples 
+
+val orderItemsSortedTuples = orderItemsMap.sortByKey()
+
+77 // Aggregations - aggregateByKey
+
+Find total revenue and maximum of order_item_subtotal for each order_id
+
+input (order_id, order_item_subtotal) tuples - orderItemsMap
+output (order_id, (total_revenue, max_order_item_subtotal)
+
+val revenueAndMaxPerOrderId = orderItemsMap.
+aggregateByKey((0.0f,0.0f))(
+(inter, subtotal) => (inter._1+subtotal, if(inter._2>subtotal) inter._2 else subtotal)	,
+(inter1, inter2) => (inter1._1 + inter2._1  , if(inter1._2 > inter2._2) inter1._2 else inter2._2)
+)
+
+78 // Sorting - sortByKey()
+
+val products = sc.textFile("/public/retail_db/products")
+val productMap = products.map(rec => (rec.split(",")(1).toInt, rec))
+val sortedProducts = productMap.sortByKey(false)
+
+Sometimes keys will be combination of two columns as composite key.. Consider below example with product_category_id and product_price as key
+
+val productMap = products.filter(rec => rec.split(",")(4)!="")map(rec => ((rec.split(",")(1).toInt, rec.split(",")(4).toFloat),rec))
+
+We need data in ascending order by product_category_id and descending order by product_price.
+
+val productsSortedByCategoryId = productMap.sortByKey() - this gives both in ascending order.
+
+So while doing map logic only, if we negate the one of the tuple entry in the key for which we want that to be in descending order then it will work as below
+
+val productsMap = products.filter(rec => rec.split(",")(4)!="")map(rec => ((rec.split(",")(1).toInt, -rec.split(",")(4).toFloat),rec))
+val productsSortedByCategoryId = productsMap.sortByKey() 
+
+To ignore the key and get the final result, we use map function.
+
+val sortedProducts = productsSortedByCategoryId.map(rec => rec._2)
+
+79 // Ranking - Global ( details of top 10 products )
+
+val productsMap = products.filter(rec => rec.split(",")(4)!="")map(rec => (rec.split(",")(4).toFloat,rec))
+val productsSortedByPrice = productsMap.sortByKey(false)
+productsSortedByPrice.take(10).map(rec => rec._2).foreach(println)
+
+products.filter(rec => rec.split(",")(4) != "").takeOrdered(10)(Ordering[Float].reverse.on(product => product.split(",")(4).toFloat)).foreach(println)
+
+80 // Ranking - Get top N priced products within each product category
+
+val recordsMap = products.filter(rec => rec.split(",")(4) != "").map(rec => (rec.split(",")(1).toInt,rec))
+val groupedProducts = recordsMap.groupByKey
+val productsIterable = groupedProducts.first._2
+
+def getTopNPricedProducts(productsIterable: Iterable[String], topN : Int):Iterable[String] ={
+  
+  val topNPrices = productsIterable.map(rec => rec.split(",")(4).toFloat).toSet.toList.sortBy(o => -o).take(topN)  // This is not working. Is working if we separate in to two statements. Do any one of below
+
+  val topNPrices = productsIterable.map(rec => rec.split(",")(4).toFloat).toList.distinct.sortBy(o => -o).take(5) //not using set
+  or
+  val topNPrices = productsIterable.map(rec => rec.split(",")(4).toFloat).toSet.toList.sortBy((o:Float) => -o).take(topN)
+  or
+  val topNPrices = productsIterable.map(rec => rec.split(",")(4).toFloat).toSet[Float].toList.sortBy(o => -o).take(topN)
+
+  val minOfTopNPrices = topNPrices.min
+  val productsIterableSorted = productsIterable.toList.sortBy(product => -product.split(",")(4).toFloat)
+  val topNPricedProducts = productsIterableSorted.takeWhile(product => product.split(",")(4).toFloat >= minOfTopNPrices)
+  topNPricedProducts
+
+}
+
+To get topNPriced products for each category id we either use map or flatMap. The difference, we see in the type of output produced 
+
+Using map
+val top5PricedProductsByCategoryId = groupedProducts.map(product => getTopNPricedProducts(product._2,5))
+top5PricedProductsByCategoryId: org.apache.spark.rdd.RDD[Iterable[String]] = MapPartitionsRDD[6] at map at <console>:45
+
+Using flatMap we get individual records by flattening out the output
+val top5PricedProductsByCategoryId = groupedProducts.flatMap(product => getTopNPricedProducts(product._2,5))
+top5PricedProductsFlatMap: org.apache.spark.rdd.RDD[String] = MapPartitionsRDD[7] at flatMap at <console>:45
+
+// 84 Set operations 
+
+orders have order_customer_id in 3rd field
+
+We would like to get all customers who placed orders both in 2013-Aug and 2013-Sep. For this we perform intersection
+
+val augCustomers = orders.filter(rec => rec.split(",")(1).substring(0,7) == "2013-08").map(rec => rec.split(",")(2).toInt)
+val sepCustomers = orders.filter(rec => rec.split(",")(1).substring(0,7) == "2013-09").map(rec => rec.split(",")(2).toInt)
+
+//customers who placed orders both in 2013-Aug and 2013-Sep. Intersection has distinct already applied
+val customers_201308_and_201309 = augCustomers.intersection(sepCustomers)
+
+//all customers who placed orders in 2013-Aug and 2013-Sep. Distinct have to be applied after union
+val customers_201308_union_201309 = augCustomers.union(sepCustomers).distinct
+
+// all customers who placed orders in 2013-Aug but not in 2013-Sep
+
+val augCustomers_not_in_sep = augCustomers.filter(rec => !sepCustomers.toLocalIterator.toSet.contains(rec)) 
+// Above will not work. We cannot give one RDD in transformation function of another RDD
+
+
+val aug_leftJoin_sep_customers = augCustomers.map(rec => (rec,1)).leftOuterJoin(sepCustomers.map(rec => (rec,2))) 
+val augCustomers_not_in_sep = aug_leftJoin_sep_customers.filter(rec => rec._2._2 == None).map(rec => rec._1).distinct
+
+
+// 85 Save data in Text Input Format
+
+Saving RDD back to HDFS
+
+
+val orderCountByStatus = orders.map(rec => (rec.split(",")(3),1)).reduceByKey((total,element) => total+element)
+
+orderCountByStatus.saveAsTextFile("/user/maruthi_rao2000/order_count_by_status")
+
+if we have to put custom delimiter, we need to do that operation before saving
+
+orderCountByStatus.map(rec => rec._1 +"\t"+ rec._2)saveAsTextFile("/user/maruthi_rao2000/order_count_by_status")
+
+// 86 Save data in Text Input Format using compression
+
+ordersCountByStatus.saveAsTextFile("/user/maruthi_rao2000/orders_count_by_status_snappy")
+
+validate either by
+
+"hadoop fs -ls /user/maruthi_rao2000/orders_count_by_status_snappy" - from kernel
+
+or
+
+sc.textFile("/user/maruthi_rao2000/orders_count_by_status_snappy").collect.foeach(println) - from scala context
+
+
+// 87 Saving data in standard file formats
+
+
+val ordersDF = sqlContext.read.json("/public/retail_db_json/orders")
+
+ordersDF.save("/user/maruthi_rao2000/orders_parquet","parquet")
+sqlContext.load("/user/maruthi_rao2000/orders_parquet","parquet").show
+
+So, we have read the file in json format, written (by using save) in parquet format and loaded to scalaContext to show.
+
+
+//  89 Solution - Get daily revenue per product - launching spark shell
+
+
+Check notes
+
+  // launch spark-shell - Understand the environment and use resources optimally
+  spark-shell --master yarn --num-executors 1 --executor-memory 512M --conf spark.ui.port=14623
+
+  // read order and order-items
+  val orders = sc.textFile("/public/retail_db/orders")
+  val orderItems = sc.textFile("/public/retail_db/order_items")
+  orders.take(10).foreach(println)
+  orderItems.take(10).foreach(println)
+
+  // filter completed or closed orders
+
+  val ordersFilter = orders.filter(rec => rec.split(",")(3) == "COMPLETE" || rec.split(",")(3) == "CLOSED")
+
+  // extract (order_id, order_date)
+  val ordersMap = ordersFilter.map(rec => (rec.split(",")(0).toInt, rec.split(",")(1).substring(0,10)))
+
+  // extract (order_id, (order_item_product_id, order_item_subtotal))
+  val orderItemsMap = orderItems.map(rec => (rec.split(",")(1).toInt, (rec.split(",")(2).toInt, rec.split(",")(4).toFloat)))
+
+  // join two data sets
+  val joinedOrders = ordersMap.join(orderItemsMap)
+  // org.apache.spark.rdd.RDD[(Int, (String, (Int, Float)))]
+  // (order_id, (order_date,(order_item_product_id, order_item_subtotal)))
+
+  // Get daily revenue per product id
+  // We need to get data in the form of ((order_date, order_item_product_id) , order_item_subtotal)
+  // (order_date, order_item_product_id) is the composite key
+
+  val joinedOrdersMap = joinedOrders.map(rec => ((rec._2._1, rec._2._2._1),rec._2._2._2))
+  // gives org.apache.spark.rdd.RDD[((String, Int), Float)]
+
+  // compute dailyRevenuePerProductId using reduceByKey
+  val dailyRevenuePerProductId = joinedOrdersMap.reduceByKey((total, dailyRevenue) => total+dailyRevenue )
+
+  // Load products from local file system. If we are using local file system path instead of HDFS path, we need to include file name also in path as below
+  import scala.io.Source
+  val productsRaw = Source.fromFile("/data/retail_db/products/part-00000").getLines.toList
+
+  // parallelize method will take sequence as argument. But getLines will return data of type Iterable. So we need to convert from Iterable to sequence. List is a sequence.
+
+  val products = sc.parallelize(productsRaw)
+
+  //
+
+  // Join daily revenue per product id with products to get daily revenue by product (by name)
+  val productsMap = products.map(rec => (rec.split(",")(0).toInt,rec.split(",")(2)))
+
+  // changing to key value as per productsMap to join
+  val dailyRevenuePerProductIdMap = dailyRevenuePerProductId.map(rec => (rec._1._2,(rec._1._1, rec._2)))
+
+  val dailyRevenuePerProductJoin = dailyRevenuePerProductIdMap.join(productsMap)
+  // gives  org.apache.spark.rdd.RDD[(Int, ((String, Float), String))] - (product_id,((date, revenue), product_name) 
+
+  // Sort the data by date in ascending order and daily revenue per product in descending order.
+  // We will negate the element which has to be in descending, and apply ascending on it.
+  val dailyRevenuePerProductSorted = dailyRevenuePerProductJoin.map( rec => ((),()) ) // - two tuples expanded below
+  map( rec => ((rec._2._1._1, -rec._2._1._2),(rec._2._1._1, rec._2._1._2, rec._2._2)) )
+  .sortByKey()
+
+  // org.apache.spark.rdd.RDD[((String, Float), (String, Float, String))]
+  // ((date_ascending, revenue_descending),(date, revenue, product_name))
+  
+  // Extracting required fields which are in second tuple
+  val dailyRevenuePerProduct = dailyRevenuePerProductSorted.map(rec => rec._2._1 + "," + rec._2._3 + "," + rec._2._3)
+
+  // Save final output in avro file format as well as text file format
+  // HDFS Location - avro format /user/maruthi_rao2000/daily_revenue_avro_scala
+  // HDFS Location - text format /user/maruthi_rao2000/daily_revenue_txt_scala
+  dailyRevenuePerProduct.saveAsTextFile("/user/maruthi_rao2000/daily_revenue_txt_scala")
+
+
+  // copy the saved file in to local file system at /home/maruthi_rao2000/daily_revenue_scala
+  hadoop fs -get /user/maruthi_rao2000/daily_revenue_txt_scala /home/maruthi_rao2000/daily_revenue_scala
+
+
+
+// 96 Run locally using spark-submit
+
+spark-submit can be used both locally and on cluster.
+
+spark-submit --class <ClassName> <jar path> <class arguments>
+
+spark-submit --class DailyRevenue /Users/RAMA/Documents/IdeaProjects/retail/target/scala-2.10/retail_2.10-0.1.jar /Users/RAMA/Documents/data/retail_db/ /Users/RAMA/Documents/data/retail_db/products/part-00000 /Users/RAMA/Documents/data/retail_db/daily_revenue_txt_scala local
+
+
+// 97 Run remote
+
+  // scp the file to server
+  scp /Users/RAMA/Documents/IdeaProjects/retail/target/scala-2.10/retail_2.10-0.1.jar maruthi_rao2000@gw03.itversity.com:/home/maruthi_rao2000
+
+spark-submit --class <ClassName> --master yarn --conf spark.ui.port=14623 <jar-path> <class arguments>
+
+spark-submit --class DailyRevenue --master yarn --conf spark.ui.port=14623 /home/maruthi_rao2000/retail_2.10-0.1.jar /public/retail_db/ /data/retail_db/products/part-00000 /user/maruthi_rao2000/daily_revenue_from_program yarn-client
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
