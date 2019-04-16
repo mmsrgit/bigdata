@@ -1,0 +1,61 @@
+Sample queries
+
+create table customer_orders(customer_id int, customer_fname string, customer_lname string, order_id int);
+create table customer_orders(customer_id int(5), customer_fname varchar(25), customer_lname varchar(25), order_id int(5));
+create table customer_orders_export(customer_id int(5), customer_fname varchar(25), customer_lname varchar(25), order_id int(5));
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table customer_orders \
+ --query "select c.customer_id,c.customer_fname,c.customer_lname,o.order_id from customers c left outer join orders o on c.customer_id = o.order_customer_id and \$CONDITIONS" \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/customer_orders \
+ --split-by customer_id \
+ --num-mappers 1
+
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --query "select c.customer_id,c.customer_fname,c.customer_lname,o.order_id from customers c left outer join orders o on c.customer_id = o.order_customer_id and \$CONDITIONS" \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/customer_orders \
+ --split-by customer_id \
+ --num-mappers 1
+
+
+// In the below query we are using split-by customer_id
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --table customer_orders \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table customer_orders \
+ --num-mappers 1 \
+ --null-non-string -999 \
+ --null-string ""
+
+
+ select c.customer_id,c.customer_fname,c.customer_lname,o.order_id from retail_db.customers c left outer join retail_db.orders o on c.customer_id = o.order_customer_id
+
+export from Hive to mysql
+--------------------------
+
+ sqoop export \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+  --username retail_user \
+  --password itversity \
+  --table customer_orders_export \
+  --export-dir /apps/hive/warehouse/maruthi_sqoop_import.db/customer_orders \
+  --num-mappers 1 \
+  --input-fields-terminated-by "\001" 
+
+
+
+  select o.order_id, sum(order_item_subtotal) as order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id where o.order_status in ('COMPLETE','CLOSED') group by  o.order_id having order_revenue > 1000.0

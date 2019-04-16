@@ -1,0 +1,215 @@
+Exercises
+==========
+
+spark-shell --master yarn \
+--conf spark.ui.port=14623 \
+--executor-cores 2 \
+--num-executors 6 \
+--executor-memory 2G
+
+
+Exercise 1
+
+RDD
+----
+val crimeRDD = sc.textFile("/public/crime/csv")
+val header = crimeRDD.first
+val crimes = crimeRDD.filter(rec => rec!=header)
+val crimesDT = crimes.map(rec => (rec.split(",")(2), rec.split(",")(5) ))
+val crimef = crimesDT.map(rec => ((rec._1.split(" ")(0).split("/")(2).concat(rec._1.split(" ")(0).split("/")(0)).toInt,rec._2),1))
+val crimeCount = crimef.reduceByKey((a,b) => a+b)
+val crimeSorted = crimeCount.map(rec => ((rec._1._1, -rec._2),(rec._1._1, rec._2, rec._1._2))).sortByKey()
+val crimeFinal = crimeSorted.map(rec => rec._2)
+crimeFinal.coalesce(1).saveAsTextFile("/user/maruthi_rao2000/solutions/first",classOf[org.apache.hadoop.io.compress.GzipCodec])
+
+val crimeRDD = sc.textFile("/public/crime/csv")
+val header = crimeRDD.first
+val crimes = crimeRDD.filter(rec => rec!=header)
+val crimesDT = crimes.map(rec => (rec.split(",")(2), rec.split(",")(5) ))
+val crimeDF = crimesDT.map(rec => (rec._1.split(" ")(0).split("/")(2).concat(rec._1.split(" ")(0).split("/")(0)).toInt,rec._2)).toDF("date","type")
+crimeDF.registerTempTable("crime_data")
+val crimeCount = sqlContext.sql("select date, count, type from (select date , count(1) as count, type from crime_data group by date , type) q order by date asc, count desc")
+val crimeFinal = crimeCount.rdd.map(rec => rec.mkString("\t"))
+crimeFinal.coalesce(1).saveAsTextFile("/user/maruthi_rao2000/solutions/second",classOf[org.apache.hadoop.io.compress.GzipCodec])
+
+sqlRow to string => mkString(delimiter)
+
+
+val crimeRDD = sc.textFile("/public/crime/csv")
+val header = crimeRDD.first
+val crimes = crimeRDD.filter(rec => rec!=header)
+val crimeDF = crimes.map(rec => (rec.split(",")(2),rec.split(",")(5))).toDF("date","type")
+crimeDF.registerTempTable("crime_data")
+val crimeFormatted = sqlContext.sql(" select cast(concat(substr(date,7,4),substr(date,1,2)) as int) as datef, type from crime_data ")
+crimeFormatted.registerTempTable("crime_format")
+val crimeCount = sqlContext.sql("select datef, count(1) as count, type from crime_format group by datef, type order by datef, count desc")
+val crimeFinal = crimeCount.rdd.map(rec => rec.mkString("\t"))
+5476
+
+===========================
+
+Exercise 02 - Get details of inactive customers
+
+import scala.io.Source
+val orders = Source.fromFile("/data/retail_db/orders/part-00000").getLines.toList
+val customers = Source.fromFile("/data/retail_db/customers/part-00000").getLines.toList
+val ordersRDD = sc.parallelize(orders)
+val customersRDD = sc.parallelize(customers)
+val orderT = ordersRDD.map(rec => (rec.split(",")(2).toInt,rec.split(",")(0).toInt)
+val customerT = customersRDD.map(rec => (rec.split(",")(0).toInt,(rec.split(",")(2), rec.split(",")(1))))
+val joined = customerT.leftOuterJoin(orderT)
+val customersNoOrders = joined.filter(rec => rec._2._2 == None)
+val customersF = customersNoOrders.map(rec => (rec._2._1,1))
+val customerSorted = customersF.sortByKey().map(rec => rec._1)
+val customerFormatted = customerSorted.map(rec => rec._1+", "+rec._2)
+
+
+======================================
+
+Get details of inactive customers dataframes
+
+import scala.io.Source
+val orders = Source.fromFile("/data/retail_db/orders/part-00000").getLines.toList
+val customers = Source.fromFile("/data/retail_db/customers/part-00000").getLines.toList
+val ordersRDD = sc.parallelize(orders)
+val customersRDD = sc.parallelize(customers)
+
+val ordersDF = ordersRDD.map(rec => (rec.split(",")(2).toInt,rec.split(",")(0).toInt)).toDF("customer_id","order_id")
+
+val customersDF = customersRDD.map(rec => (rec.split(",")(0).toInt,rec.split(",")(2),rec.split(",")(1))).toDF("customer_id","customer_lname","customer_fname")
+
+ordersDF.registerTempTable("orders")
+customersDF.registerTempTable("customers")
+
+
+val joined = sqlContext.sql("select c.customer_lname, c.customer_fname from customers c left outer join orders o on c.customer_id = o.customer_id where order_id is null order by c.customer_lname, c.customer_fname")
+
+val customerF = joined.rdd.map(rec => rec.mkString(", "))
+customerF.saveAsTextFile()
+
+==========================================
+
+Exercise 3 - Get top 3 crime types based on number of incidents in RESIDENCE area using “Location Description”
+
+val crimeRDD = sc.textFile("/public/crime/csv")
+val header = crimeRDD.first
+val crimes = crimeRDD.filter(rec => rec!=header)
+val crimesR = crimes.filter(rec => rec.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)(7) == "RESIDENCE")
+
+val crimeRT = crimesR.map(rec => (rec.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)(5),1))
+val crimeCount = crimeRT.reduceByKey((a,b)=>a+b)
+val crimeSorted = crimeCount.map(rec => (rec._2,rec._1)).sortByKey(false)
+val crimeF = crimeSorted.map(rec => (rec._2,rec._1)).take(3)
+// take gives array. We need to convert to RDD to write into file. So use sc.parallelize
+val crimeFRDD = sc.parallelize(crimeF)
+val crimeDF = crimeFRDD.toDF("type","count")
+crimeDF.coelesce(1).write.json("/user/maruthi_rao2000/solutions/third")
+
+takeaways
+----------
+sortByKey(false)
+array to RDD => sc.parallelize
+top N => sort and use take(N)
+
+After saving in json, we can validate by using sc.textFile as json file is also text file. When we read the file, it displays json format
+
+Using dataframes and sparksql
+------------------------------
+
+val crimeRDD = sc.textFile("/public/crime/csv")
+val header = crimeRDD.first
+val crimes = crimeRDD.filter(rec => rec!=header)
+val crimesR = crimes.filter(rec => rec.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)(7) == "RESIDENCE")
+val crimeTypes = crimesR.map(rec => rec.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)(5))
+val crimeDF = crimeTypes.toDF("crime_type")
+crimeDF.registerTempTable("residence_crime_type")
+val crimeRows = sqlContext.sql("select crime_type, count(1) as count from residence_crime_type group by crime_type order by count desc limit 3")
+crimeRows.coelesce(1).write.json("/user/maruthi_rao2000/solutions/third_df")
+crimeRows.coalesce(1).write.json("/user/maruthi_rao2000/solutions/third_df")
+
+val crimeF = crimeRows.rdd.map(rec => rec.mkString(","))
+==========================================================
+
+Exercise 04
+-----------
+
+************
+If the data is in local file system with more number of files, instead of using Source.fromFile for each file, we can copy the files into HDFS and use sc.textFile
+************
+
+hadoop fs -copyFromLocal /data/nyse /user/maruthi_rao2000/nyse
+val nyse = sc.textFile("/user/maruthi_rao2000/nyse")
+val nysemap = nyse.map(rec => (rec.split(",")(0),rec.split(",")(1),rec.split(",")(2).toFloat,rec.split(",")(3).toFloat,rec.split(",")(4).toFloat, rec.split(",")(5).toFloat,rec.split(",")(6).toInt)).toDF("stockticker","transactiondate","openprice","highprice","lowprice","closeprice","volume")
+nysemap.coelesce(1).write.parquet("/user/maruthi_rao2000/solutions/four/nyse_parquet")
+
+takeaway
+---------
+
+if you are converting comma seperated text to data frame, we need to split and give individual names as we did above
+
+val wordfile = sc.textFile("/public/randomtextwriter")
+val words = wordfile.flatMap(rec => rec.split(" "))
+val wordt = words.map(rec => (rec,1))
+val wordCount = wordt.reduceByKey((a,b) => a+b, 8)
+
+takeaway
+--------
+
+groupByKey, reduceByKey, countByKey .. all these functions have an optional parameter as number of tasks.
+
+In data frame api, avro will not be there by default. But in certification, they will integrate avro file format.
+
+We need to do following
+
+--packages                  Comma-separated list of maven coordinates of jars to include
+                              on the driver and executor classpaths. Will search the local
+                              maven repo, then maven central and any additional remote
+                              repositories given by --repositories. The format for the
+                              coordinates should be groupId:artifactId:version.
+
+
+we need to give in "--packages " option while launching the spark shell                       
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

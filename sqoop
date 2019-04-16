@@ -1,4 +1,7 @@
 mysql -h ms.itversity.com -u retail_user -p
+
+select * from order_items limit 10;
+
 1) select o.*, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id group by o.order_id,o.order_date, o.order_customer_id, o.order_status;
 
 2) select o.order_date, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id where o.order_date like '2013-08%' group by o.order_date
@@ -51,9 +54,11 @@ sqoop import \
   --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
   --split-by order_status 
 
+***** Text splitter command should be before --connect
+
 sqoop import \
  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
- --username retail_user --password itversity \
+ --username retail_user \
  --password itversity \
  --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_revenue \
  --num-mappers 2 \
@@ -93,6 +98,9 @@ sqoop import \
  --query "select * from orders where \$CONDITIONS and order_date like '2014-01%'" \
  --split-by order_id \
  --append
+
+ Alternatively, if we want sqoop to identify primary key when using --num-mappers, we can use combination of --table and --where.
+ This is alternative to --query and --split-by combination. However this is not possible if we are using joins.
 
 sqoop import \
  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
@@ -275,6 +283,8 @@ sqoop export \
 
 update
 -------
+// --update-key argument is used so that if export is done to a table which is not empty, the rows are updated instead of insert
+
 sqoop export \
  --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
  --username retail_user \

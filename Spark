@@ -15,6 +15,8 @@ launching spark shell
 spark-shell --master yarn \
   --conf spark.ui.port=14623
 
+  spark-shell --master yarn --conf spark.ui.port=14623 --num-executors 1 --executor-memory 512M
+
   port number should be 5 digit in range 10000 to 65535
 
 hadoop fs -ls /public/retail_db
@@ -54,6 +56,18 @@ To see whether DAG has been created properly, we run an API called toDebugString
 
 To better illustrate this, if we have performed a transformation we do not see a job created in tracking URL. We see that only after action being performed.
 
+**********
+
+If the file format is text, sc object has API to read it by using sc.textFile
+But if the file format is some other industry standard specification like orc, json, parquet, avro etc. we need to use another implicit object called sqlConttext.
+
+val ordersDF = sqlContext.load("/public/retail_db_json/orders","json")
+ordersDF.show //to preview
+ordersDF.printSchema
+ordersDF.select("order_id","order_status").show
+
+
+
 67. Row Level Transformations
 
 val str = orders.first
@@ -88,6 +102,9 @@ orders.map(str => str.split(",")(3)).distinct.collect.foreach(println)
 70. Joining data sets - Inner Join
 
 //Join Orders and OrderItems
+
+*************
+Before joining the datasets, we have to convert them into key value pairs
 
 (K,V) -> order_id and order_date
 (K,W) -> order_id and order_subtotal
@@ -137,10 +154,12 @@ val orderItemsGBK = orderItemsMap.groupByKey
 orderItemsGBK is of type org.apache.spark.rdd.RDD[(Int, Iterable[Float])]
  e.g. (29270,CompactBuffer(299.95, 119.98, 399.98, 159.96, 399.98))
 
+************
 To get revenue by orderId
 
 val orderRevenue = orderItemsGBK.map(rec => (rec._1,rec._2.sum))
 
+****************
 To display order revenues for each order_id in ascending/descending order.
 
 val orderItemsSorted = orderItemsGBK.map(rec => (rec._1, rec._2.toList.sorted))
@@ -183,9 +202,9 @@ val products = sc.textFile("/public/retail_db/products")
 val productMap = products.map(rec => (rec.split(",")(1).toInt, rec))
 val sortedProducts = productMap.sortByKey(false)
 
-Sometimes keys will be combination of two columns as composite key.. Consider below example with product_category_id and product_price as key
+Sometimes keys will be combination of two columns like composite key.. Consider below example with product_category_id and product_price as key
 
-val productMap = products.filter(rec => rec.split(",")(4)!="")map(rec => ((rec.split(",")(1).toInt, rec.split(",")(4).toFloat),rec))
+val productMap = products.filter(rec => rec.split(",")(4)!="").map(rec => ((rec.split(",")(1).toInt, rec.split(",")(4).toFloat),rec))
 
 We need data in ascending order by product_category_id and descending order by product_price.
 
@@ -202,7 +221,14 @@ val sortedProducts = productsSortedByCategoryId.map(rec => rec._2)
 
 79 // Ranking - Global ( details of top 10 products )
 
-val productsMap = products.filter(rec => rec.split(",")(4)!="")map(rec => (rec.split(",")(4).toFloat,rec))
+*********************************
+
+If you want whole records to be sorted based on one value in record, form rdd by taking that value as key, then apply sortByKey() and ignore the key
+If you have CompactBuffer then apply toList and apply sorted or sortBy(fn)
+sortBy(fn) can be applied directly on RDD if RDD is of type Int or Float. It cannot be applied on RDD of tuples
+
+
+val productsMap = products.filter(rec => rec.split(",")(4)!="").map(rec => (rec.split(",")(4).toFloat,rec))
 val productsSortedByPrice = productsMap.sortByKey(false)
 productsSortedByPrice.take(10).map(rec => rec._2).foreach(println)
 
@@ -269,11 +295,26 @@ val augCustomers_not_in_sep = aug_leftJoin_sep_customers.filter(rec => rec._2._2
 // 85 Save data in Text Input Format
 
 Saving RDD back to HDFS
+***********************************
+def saveAsTextFile(path: String): Unit                                                                      
+def saveAsTextFile(path: String, codec: Class[_ <: org.apache.hadoop.io.compress.CompressionCodec]): Unit  
+
+one method stores as a plain text file 
+By using another method we can give compression codec of your choice
+org.apache.hadoop.io.compress.GzipCodec,org.apache.hadoop.io.compress.DefaultCodec,org.apache.hadoop.io.compress.SnappyCodec
+
+sortedRevenue.saveAsTextFile("/user/maruthi_rao2000/dailyRevenueSnappy",classOf[org.apache.hadoop.io.compress.SnappyCodec])
+
+If you want to check the file again in scala context, use sc.textFile("/user/maruthi_rao2000/dailyRevenueSnappy")
+Note: You don't have to give compression algorithm since snappy is one of the supported forms and mentioned in core-site.xml
+
+******************************************
 
 
 val orderCountByStatus = orders.map(rec => (rec.split(",")(3),1)).reduceByKey((total,element) => total+element)
 
 orderCountByStatus.saveAsTextFile("/user/maruthi_rao2000/order_count_by_status")
+//In above order_count_by_status whould be non-existing directory, so that the command will create the directory
 
 if we have to put custom delimiter, we need to do that operation before saving
 
@@ -281,7 +322,7 @@ orderCountByStatus.map(rec => rec._1 +"\t"+ rec._2)saveAsTextFile("/user/maruthi
 
 // 86 Save data in Text Input Format using compression
 
-ordersCountByStatus.saveAsTextFile("/user/maruthi_rao2000/orders_count_by_status_snappy")
+ordersCountByStatus.saveAsTextFile("/user/maruthi_rao2000/orders_count_by_status_snappy", classOf[org.apache.hadoop.io.compress.SnappyCodec])
 
 validate either by
 
@@ -294,8 +335,15 @@ sc.textFile("/user/maruthi_rao2000/orders_count_by_status_snappy").collect.foeac
 
 // 87 Saving data in standard file formats
 
-
+val ordersDF = sqlContext.read.text("/user/maruthi_rao2000/sqoop_import/retail_db/orders")
+(or)
 val ordersDF = sqlContext.read.json("/public/retail_db_json/orders")
+
+To preview,
+ordersDF.show
+(or)
+ordersDF.take(10).foreach(println)
+
 
 ordersDF.save("/user/maruthi_rao2000/orders_parquet","parquet")
 sqlContext.load("/user/maruthi_rao2000/orders_parquet","parquet").show

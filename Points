@@ -25,6 +25,10 @@ hdfs-site.xml
 du -sh //command to know the size of folder
 hadoop fs -du -s -h
 
+Also,
+ls -h // command to know the size 
+hadoop fs -ls -h
+
 //to get the details of hdfs locations
 
 hdfs fsck /user/maruthi_rao2000/crime -files -blocks -location
@@ -55,6 +59,10 @@ Total number of files: hadoop fs -ls /path/to/hdfs/* | wc -l
 Total number of lines: hadoop fs -cat /path/to/hdfs/* | wc -l
 Total number of lines for a given file: hadoop fs -cat /path/to/hdfs/filename | wc -l
 
+// to display the size 
+
+hadoop fs -ls -h <path>
+
 //sqoop connect will work only if relevant jars are present below location
 /usr/hdp/current/sqoop-client/lib
 
@@ -76,6 +84,16 @@ To see compression algorithms supported, check in /etc/hadoop/conf/core-site.xml
 </property>
 
 
+warehouse-dir creates the folder with table name.
+--table orders
+--warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db
+
+Above command creates orders folder inside retail_db if retail_db exists, otherwise it creates retail_db and create a folder named orders and then copy the records. But target-dir creates files directly under specified folder. But that folder should not be existing.
+
+--table orders
+--target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders
+
+
 // If we have to import only those rows from table which has order_id > 50000 we use --boundary-query
 
 sqoop import \
@@ -94,4 +112,326 @@ sqoop import \
 
 
 sqoop export --connect jdbc:mysql://ms.itversity.com:3306/retail_export --username retail_user --password itversity --export-dir hdfs://nn01.itversity.com:8020/apps/hive/warehouse/maruthi_sqoop_import.db/daily_revenue --table daily_revenue_mmsr --input-fields-terminated-by "\001" --m 1
+
+
+// If we are using hive import with --query you must specify target-dir and --split-by
+
+takeOrdered
+takeWhile
+
+
+def saveAsTextFile(path: String): Unit                                                                      
+def saveAsTextFile(path: String, codec: Class[_ <: org.apache.hadoop.io.compress.CompressionCodec]): Unit  
+
+one method stores as a plain text file 
+By using another method we can give compression codec of your choice
+org.apache.hadoop.io.compress.GzipCodec,org.apache.hadoop.io.compress.DefaultCodec,org.apache.hadoop.io.compress.SnappyCodec
+
+sortedRevenue.saveAsTextFile("/user/maruthi_rao2000/dailyRevenueSnappy",classOf[org.apache.hadoop.io.compress.SnappyCodec])
+
+If you want to check the file again in scala context, use sc.textFile("/user/maruthi_rao2000/dailyRevenueSnappy")
+Note: You don't have to give compression algorithm since snappy is one of the supported forms and mentioned in core-site.xml
+
+
+To save in different file formats, we need to use dataFrames as RDD doesn't have APIs for fileFormat
+DataFrames can be formed using sqlContext and not through sc.
+val ordersDF = sqlContext.read.text("/user/maruthi_rao2000/sqoop_import/retail_db/orders")
+(or)
+val ordersDF = sqlContext.read.json("/public/retail_db_json/orders")
+
+*******************************************************
+
+
+RDD.saveAsTextFile
+
+DataFrame.save(path, format)
+DataFrame.write.<format>(path)
+
+sqlContext.read.<format>(path)
+sqlContext.load(format,path)
+
+******************************************************
+
+If the file format is text, sc object has API to read it by using sc.textFile
+***Using sc.textFile command we can read compressed files also as long as the compression algorithm is supported.
+But if the file format is some other industry standard specification like orc, json, parquet, avro etc. we need to use another implicit object called sqlConttext.
+
+val ordersDF = sqlContext.load("/public/retail_db_json/orders","json")
+ordersDF.show //to preview
+ordersDF.printSchema
+ordersDF.select("order_id","order_status").show
+
+****************************************************
+
+Hive language manual
+
+***************************************************
+
+we can add strings or integers with +"\t"+
+
+
+to unzip gz file use below command
+gunzip part-00000.gz
+
+************************************************
+
+If we are giving registerTempTable command there can be error if there is same table name in hive. In that case, change table name
+
+
+sortByKey() 
+sortByKey(false) - descending
+
+To get top N records, we can use take(N) on RDD
+
+
+
+=======================================================
+
+sqoop eval  \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--query "select * from orders limit 10"
+
+To import orders table records to hdfs into orders folder, we can do it in two ways
+1) 
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table orders \
+ --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db
+
+ If we use warehouse-dir it will create folder in the path specified with name as table name.
+
+2) 
+If we use target-dir, condition is that the folder should not exist. Then it will create the folder (not the folder with table name) and creates the files inside the folder directly. It will not create folder with table name.
+
+If the folder already exists, it will throw exception saying folder already exist
+
+***** it will not complain if there is --append control argument
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table orders \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders
+
+
+ sqoop import - differenet file formats
+
+
+ sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --table orders \
+  --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_avro \
+  --as-avrodatafile 
+
+With compression codec
+
+ sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --table orders \
+  --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_compress \
+  --compression-codec org.apache.hadoop.io.compress.GzipCodec
+
+check /etc/hadoop/conf/core-site.xml for all compression algorithms
+
+order-revenue
+--------------
+
+select o.order_id, sum(oi.order_item_subtotal) from orders o join order_items oi on o.order_id = oi.order_item_order_id group by o.order_id
+
+
+sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --query "select o.order_id, sum(oi.order_item_subtotal) from orders o join order_items oi on o.order_id = oi.order_item_order_id and \$CONDITIONS group by o.order_id" \
+  --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_revenue \
+  --num-mappers 2 \
+  --split-by order_id
+
+******************
+  If where clause is present in query then give "where \$CONDITIONS and <remaining conditions>". If where clause is not there then give "and \$CONDITIONS before group by". Remember back slash
+
+  With --query, when we use num-mappers, then we should specify split-by
+****************
+
+By default sqoop will use query select min(<split-by>), max(<split-by>) from <table name> 
+
+sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_boundary \
+  --num-mappers 2 \
+  --table orders \
+  --boundary-query "select min(order_id), max(order_id) from orders where order_id>68840"
+
+
+  Nulls and delimiters
+  ---------------------
+
+  sqoop import \
+   --connect jdbc:mysql://ms.itversity.com:3306/hr_db \
+   --username hr_user \
+   --password itversity \
+   --table employees \
+   --warehouse-dir /user/maruthi_rao2000/sqoop_import/hr_db/emp \
+   --null-non-string -1 \
+   --fields-terminated-by "\t" \
+   --lines-terminated-by ":"
+
+ sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_boundary \
+  --num-mappers 2 \
+  --table orders \
+  --boundary-query "select min(order_id), max(order_id) from orders where order_id>68840"
+
+  append
+  -------
+
+  sqoop import \
+   --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+   --username retail_user \
+   --password itversity \
+   --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders \
+   --table orders \
+   --where "order_date like '2013%'" \
+   --num-mappers 2
+
+   Appends can be done in following ways
+
+   1) 
+   --target-dir
+   --query
+   --num-mappers
+   --split-by
+   --append
+
+   2) 
+
+   --target-dir 
+   --table orders 
+   --where  
+   --num-mappers
+   --append
+
+   --target-dir 
+   --table orders 
+   --boundary-query
+   --num-mappers
+   --append
+
+   3) 
+
+   --check-column
+   --incremental append
+   --last-value 
+
+ 1) sqoop import \
+   --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+   --username retail_user \
+   --password itversity \
+   --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_boun \
+   --table orders \
+   --where "order_date like '2013%'" \
+   --num-mappers 2
+
+2) sqoop import \
+   --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+   --username retail_user \
+   --password itversity \
+   --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders_boun \
+   --table orders \
+   --incremental append \
+   --check-column order_date \
+   --last-value '2013-12-31' \
+   --num-mappers 2
+
+
+hive
+----
+sqoop import from mysql to hive
+
+sqoop import \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --table orders \
+  --num-mappers 2 \
+  --hive-import \
+  --hive-database maruthi_sqoop_import \
+  --hive-table orders
+
+**** Check if you gave --hive-import. If not the job will be executed but table will not be created. If we are executing again after correcting, we should delete the temp folder created in root location.
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

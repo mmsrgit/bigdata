@@ -26,8 +26,10 @@ create table orders (
 ) row format delimited fields terminated by ','  
 stored as textfile;
 
-// Loading data into table 
+// Loading local data into table 
 load data local inpath '/data/retail_db/orders' into table orders;
+// loading hdfs data into table
+load data inpath '/user/maruthi_rao2000/sqoop_import/retail_db/orders' into table orders;
 
 
 create table order_items (
@@ -40,11 +42,15 @@ create table order_items (
 ) row format delimited fields terminated by ','  
 stored as textfile;
 
+// in the above command 'stored as textfile' is optional as the default format is text
+
 load data local inpath '/data/retail_db/order_items' into table order_items;
 
 describe order_items
 describe formatted order_items;
 // above command displays not only table information but also metadata related to table like HDFS location. 
+
+In hive shell, instead of "hadoop fs" we use "dfs"
 
 dfs -ls hdfs://nn01.itversity.com:8020/apps/hive/warehouse/maruthi_retail_db_txt.db/order_items;
 
@@ -78,7 +84,8 @@ insert into table order_items select * from maruthi_retail_db_txt.order_items;
 
   //sqlContext variable will be available whenever we launch spark shell.
 
-sqlContext.sql("use maruthi_retail_db_txt")
+sqlContext.sql("use maruthi_retail_db_txt") 
+sqlContext.sql("select * from orders limit 10") // this will return dataFrame, if you want to print in console, use 'show'
 sqlContext.sql("select * from orders limit 10").show
 
 
