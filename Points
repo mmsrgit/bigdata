@@ -469,6 +469,35 @@ in spark we can concat strings with '+'
 
 all are functions in sql. Usually we are not using '.'
 
+inorder to compress and write the output, use should change back to rdd
+
+sqlRow to string with delimiter can be done as below
+
+*******
+crimedf.rdd.map(rec => rec.mkString("\t"))
+
+There need not be always two elements in a tuple. It can also have more than two. For e.g. if we have to convert rdd to df we will give logic to have as many elements in tuple as we need as number of columns as below.
+
+val customersDF = customers.map(rec => (rec.split(",")(0).toInt, rec.split(",")(1),rec.split(",")(2))).toDF("customer_id","fname","lname")
+
+************* if it is tuples
+sortByKey(true)
+
+
+
+hadoop fs -copyFromLocal /data/nyse /user/maruthi_rao2000
+
+directory will be created automatically using source directory name
+
+****************************
+To convert RDD to DF, first convert to tuple and then apply ".toDF" to convert into dataframe
+
+
+
+
+
+
+
 
 
 

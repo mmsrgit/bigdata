@@ -111,3 +111,171 @@ sqoop import \
 
  select o.order_date, sum(oi.order_item_subtotal) as revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id group by o.order_date
  select o.order_date, sum(oi.order_item_subtotal) as daily_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id group by o.order_date
+
+Exercises
+---------
+
+ 1)
+Get monthly count of primary crime type, sorted by month in ascending and number of crimes per type in descending order
+val crimes = sc.textFile("/public/crime/csv")
+val fir = crimes.first
+val crimesrdd = crimes.filter(rec => rec!=fir)
+val dcr = crimesrdd.map(rec => ((rec.split(",")(2).substring(6,10).concat(rec.split(",")(2).substring(0,2)).toInt,rec.split(",")(5)),1))
+val crimecount = dcr.reduceByKey((a,b) => a+b)
+
+val shuffled = crimecount.map(rec => ((rec._1._1,-rec._2),rec))
+val sorted = shuffled.sortBy(o => o) 
+YYYYMM format, crime count, crime type
+val result = sorted.map(rec => rec._2._1._1+"\t"+rec._2._2+"\t"+rec._2._1._2)
+result.saveAsTextFile("/user/maruthi_rao2000/solutions/first",classOf[org.apache.hadoop.io.compress.GzipCodec])
+
+using df
+
+val crimes = sc.textFile("/public/crime/csv")
+val fir = crimes.first
+val crimesrdd = crimes.filter(rec => rec!=fir)
+val crimesdf = crimesrdd.map(rec => (rec.split(",")(2).substring(6,10).concat(rec.split(",")(2).substring(0,2)).toInt,rec.split(",")(5))).toDF("date","type")
+crimesdf.registerTempTable("crimes")
+sqlContext.sql("select date, count(*) as count, type from crimes group by date,type order by date,count desc").show
+val resultdf = sqlContext.sql("select date, count(*) as count, type from crimes group by date,type order by date,count desc")
+val crimerdd = resultdf.rdd.map(rec => rec.mkString("\t"))
+crimerdd.coalesce(1).saveAsTextFile("/user/maruthi_rao2000/solutions/first",classOf[org.apache.hadoop.io.compress.GzipCodec])
+
+2)
+Source directories: /data/retail_db/orders and /data/retail_db/customers
+Target Columns: customer_lname, customer_fname
+
+“, ”
+
+import scala.io.Source
+val ordersraw = Source.fromFile("/data/retail_db/orders/part-00000").getLines.toList
+val customersraw = Source.fromFile("/data/retail_db/customers/part-00000").getLines.toList
+val orders = sc.parallelize(ordersraw)
+val customers = sc.parallelize(customersraw)
+val ordersMap = orders.map(rec => (rec.split(",")(2).toInt,1))
+val customersMap = customers.map(rec => (rec.split(",")(0).toInt, (rec.split(",")(2),rec.split(",")(1))))
+val joined = customersMap.leftOuterJoin(ordersMap)
+val noordercustomers = joined.filter(rec => rec._2._2 == None)
+val result = noordercustomers.map(rec => (rec._2._1,1))
+val sorted = result.sortBy(o => o)
+val finalresult = sorted.map(rec => rec._1._1+", "+rec._1._2)
+
+
+using df
+
+val ordersraw = Source.fromFile("/data/retail_db/orders/part-00000").getLines.toList
+val customersraw = Source.fromFile("/data/retail_db/customers/part-00000").getLines.toList
+val orders = sc.parallelize(ordersraw)
+val customers = sc.parallelize(customersraw)
+val ordersDF = orders.map(rec => (rec.split(",")(2).toInt, rec.split(",")(0).toInt)).toDF("customer_id","order_id")
+val customersDF = customers.map(rec => (rec.split(",")(0).toInt, rec.split(",")(1),rec.split(",")(2))).toDF("customer_id","fname","lname")
+ordersDF.registerTempTable("orders")
+customersDF.registerTempTable("customers")
+val no_order_customers = sqlContext.sql("select c.lname, c.fname from customers c left outer join orders o on c.customer_id = o.customer_id where o.order_id is null order by c.lname, c.fname")
+val noordercustomers = no_order_customers.rdd.map(rec => rec.mkString(", "))
+
+
+3)
+
+val crime = sc.textFile("/public/crime/csv")
+val first = crime.first
+val crimes = crime.filter(rec => rec!=first)
+val crimemap = crimes.filter(rec => rec.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)(7) == "RESIDENCE")
+val crimeTypes = crimemap.map(rec => (rec.split(",")(5),1))
+val crimecount = crimeTypes.reduceByKey((a,b) => a+b)
+val shuffled = crimecount.map(rec => (rec._2,rec._1))
+//val sorted = shuffled.sortBy(o => o, false) // this works but the best way is
+val sorted = shuffled.sortByKey(false)
+val top3 = sorted.map(rec => (rec._2,rec._1)).take(3)
+
+take will return array
+
+val result = sc.parallelize(top3)
+val resultDF = result.toDF("crimeType","incidents")
+resultDF.coalesce(1)write.json("/user/maruthi_rao2000/solutions/third")
+
+using df
+
+val crime = sc.textFile("/public/crime/csv")
+val first = crime.first
+val crimes = crime.filter(rec => rec!=first)
+val crimemap = crimes.filter(rec => rec.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1)(7) == "RESIDENCE")
+val crimeDF= crimemap.map(rec => (rec.split(",")(5),rec.split(",")(2))).toDF("type","date")
+crimeDF.registerTempTable("crimes")
+val crimeCountTop3 = sqlContext.sql("select type, count(1) as count from crimes group by type order by count desc limit 3")
+crimeCountTop3.coalesce(1)write.json("/user/maruthi_rao2000/solutions/third")
+
+4)
+/data/nyse
+Fields (stockticker:string, transactiondate:string, openprice:float, highprice:float, lowprice:float, closeprice:float, volume:bigint)
+
+
+Since there are more files we cannot do it using Source. So first copy to HDFS
+hadoop fs -copyFromLocal /data/nyse /user/maruthi_rao2000
+
+in spark-shell,
+val nyse = sc.textFile("/user/maruthi_rao2000/nyse")
+
+val nysedf= nyse.toDF(....)
+If we directly convert to DF we cannot maintain the data type as given in problem. so first split and convert to required data type and then conver to DF
+
+
+val nysedf = nyse.map(rec => (rec.split(",")(0),rec.split(",")(1),rec.split(",")(2).toFloat,rec.split(",")(3).toFloat,rec.split(",")(4).toFloat,rec.split(",")(5).toFloat,rec.split(",")(6).toInt)).toDF("stockticker", "transactiondate", "openprice", "highprice", "lowprice", "closeprice", "volume")
+
+//we can use below argument to reduce number of partitions
+sqlContext.setConf("spark.sql.shuffle.partitions","4")
+
+nysedf.write.parquet("/user/maruthi_rao2000/solutions/four")
+
+5)
+
+spark-shell --master yarn --conf spark.ui.port=14623 --num-executors 10 --executor-memory 3G --executor-cores 2 --packages com.databricks:spark-avro_2.10:2.0.1
+
+As labs are in Hortonworks distribution, For Avro files, you have to invoke spark shell with avro package which will be as below:
+
+spark-shell --packages com.databricks:spark-avro_2.10:2.0.1 --master yarn --conf spark.ui.port=22222
+
+After this:
+
+import com.databricks.spark.avro._
+
+Now run DFname.write.avro(“ouput_path”)
+
+But In exam as it is on Cloudera distribution, You only have to use:
+
+import com.databricks.spark.avro._ //very important
+val words = sc.textFile("/public/randomtextwriter")
+val singlewords = words.flatMap(rec => rec.split(" "))
+val tuples = singlewords.map(rec => (rec,1))
+*************** reduceByKey has optional argument numpartitions. 
+val wordcount = tuples.reduceByKey((a,b) => a+b,8)
+val wordCountDF = wordcount.toDF("word","count")
+wordCountDF.write.avro("/user/maruthi_rao2000/solutions/five")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

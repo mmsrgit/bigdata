@@ -240,6 +240,7 @@ val recordsMap = products.filter(rec => rec.split(",")(4) != "").map(rec => (rec
 val groupedProducts = recordsMap.groupByKey
 val productsIterable = groupedProducts.first._2
 
+// Iterable[String] are the products. we should get topNPriced products not the prices.
 def getTopNPricedProducts(productsIterable: Iterable[String], topN : Int):Iterable[String] ={
   
   val topNPrices = productsIterable.map(rec => rec.split(",")(4).toFloat).toSet.toList.sortBy(o => -o).take(topN)  // This is not working. Is working if we separate in to two statements. Do any one of below

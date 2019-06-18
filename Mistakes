@@ -17,4 +17,7 @@ Source.fromFile will take argument which has value till file
 sc.parallelize will take list, but getLines will give iterable. so we need to give "Source.fromFile().getLines.toList"
 
 
+Remember to represent in tuple before applying toDF condition.
+
+
 
