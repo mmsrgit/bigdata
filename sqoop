@@ -65,6 +65,22 @@ sqoop import \
  --query "select o.*, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id and \$CONDITIONS group by o.order_id,o.order_date, o.order_customer_id, o.order_status" \
  --split-by order_id
 
+ File formats
+ ------------
+ --as-avrodatafile
+ --as-parquetfile
+ --as-sequencefile
+
+ Compression
+ -----------
+ --compress  // enables compression
+ --compression-codec // if you do not provide this argument, it will compress with default codec gzip
+
+ eg. --compression-codec org.apache....SnappyCodec
+
+ to check, copy to local and give below command
+ gunzip part*.gz
+
 Delimiters and handling nulls
 ------------------------------
 

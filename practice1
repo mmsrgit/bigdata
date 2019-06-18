@@ -1,0 +1,113 @@
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table orders \
+ --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
+ --num-mappers 4
+
+
+ sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table order_items \
+ --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
+ --where "order_item_id < 90000" \
+ --num-mappers 2
+
+ sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --query "select * from order_items where \$CONDITIONS and order_item_id>89999" \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/order_items \
+ --append \
+ --split-by order_item_id \
+ --num-mappers 2
+
+ or
+
+  sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table order_items\
+ --where order_item_id>89999 \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/order_items \
+ --append \
+ --num-mappers 2
+
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table orders \
+ --where 
+ --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
+ -m 2
+
+
+ ---------------------+
+| Tables_in_retail_db |
++---------------------+
+| categories          |
+| customers           |
+| departments         |
+| order_items         |
+| orders              |
+| products            |
++---------------------+
+
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table categories \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table categories \
+  -m 2
+
+  sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table customers \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table customers \
+  -m 2
+
+  sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table departments \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table departments \
+  -m 2
+
+  sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --table products \
+ --hive-import \
+ --hive-database maruthi_sqoop_import \
+ --hive-table products \
+  -m 2
+
+sqoop import \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+ --username retail_user \
+ --password itversity \
+ --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/daily_revenue \
+ --query "select o.order_date, sum(oi.order_item_subtotal) as daily_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id and \$CONDITIONS group by o.order_date" \
+ -m 1
+
+ select o.order_date, sum(oi.order_item_subtotal) as revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id group by o.order_date
+ select o.order_date, sum(oi.order_item_subtotal) as daily_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id group by o.order_date

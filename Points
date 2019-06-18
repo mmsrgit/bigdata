@@ -88,7 +88,11 @@ warehouse-dir creates the folder with table name.
 --table orders
 --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db
 
-Above command creates orders folder inside retail_db if retail_db exists, otherwise it creates retail_db and create a folder named orders and then copy the records. But target-dir creates files directly under specified folder. But that folder should not be existing.
+If we want to override if the directory already exists in case of using --warehouse-dir, we can use --delete-target-dir
+
+Above command creates orders folder inside retail_db if retail_db exists, otherwise it creates retail_db and create a folder named orders and then copy the records. But target-dir creates files directly under specified folder. But that folder should not exist, unless it is append operation.
+
+If we use target-dir, condition is that the folder should not exist. Then it will create the folder (not the folder with table name) and creates the files inside the folder directly. It will not create folder with table name.
 
 --table orders
 --target-dir /user/maruthi_rao2000/sqoop_import/retail_db/orders
@@ -104,9 +108,29 @@ sqoop import \
   --warehouse-dir /user/maruthi_rao2000/sqoop_import/retail_db \
   --boundary-query "select min(order_id), max(order_id) from orders where order_id > 50000"
 
+// If the table do not have primary key, sqoop import will complain because it cannot perform the default split logic. So it will ask to specify the --split-by column or use -m 1
+--split-by column should not have null values.
+
+If you are not sure of the control argument that you need to give when you are splitting by non numeric column then if you execute the command, the error will have the control argument. Use it before --connect
+
+--as-avrodatafile
+--as-parquetfile
+--as-sequencefile
+
+For compression use
+
+-z or--compress (default gzip)
+--compression-codec
+
+To uncompress, copy files to local using copyToLocal and use
+gunzip part*.gz
+
+
 // If we are using custom query like with joins, we cannot give --num-mappers without giving --split-by
 
 // If we use --query we must put 'and \$CONDITIONS' in the query
+
+// If we use --query, we must give --split-by even if there is a primary key
 
 // --table and --columns are mutually exclusive
 
@@ -149,6 +173,9 @@ DataFrame.write.<format>(path)
 
 sqlContext.read.<format>(path)
 sqlContext.load(format,path)
+
+
+If we have to save compressed we can to it using rdd
 
 ******************************************************
 
@@ -374,6 +401,78 @@ sqoop import \
   --hive-table orders
 
 **** Check if you gave --hive-import. If not the job will be executed but table will not be created. If we are executing again after correcting, we should delete the temp folder created in root location.
+
+
+***** In sqoop import, need to check if it is possible to have --query with --where
+
+
+****** Export table should be present before running sqoop export
+
+
+
+***** In sqoop export, if columns order is different in the table compared to the file from which we are trying to export then use columns argument to specify the order of columns to match the order in file.
+
+****** We can give column which is primary key in split-by argument, though we are not grouping by that column in query argument
+
+
+spark-shell \
+ --master yarn \
+ --conf spark.ui.port=14623 \
+ --num-executors 6 \
+ --executor-cores 2 \
+ --executor-memory 2G 
+
+
+**** Above command indicates that we want to have 2 cores in each executor. So, in total we will have 12 cores each taking 2GB of memory.
+
+Absence of record is None, if we do leftOuterJoin (synonymous to null in db)
+
+**** To sort Iterable<V> type of data we need to convert to list by calling .toList on Iterable
+
+list.sorted
+list.sortBy(o => -o)
+
+groupByKey() gives (key,Iterable)
+
+tuples.sortByKey()
+tuples.sortByKey(false)
+
+Iterable has map method
+
+hive functions
+---------------
+regexp_replace
+substring
+nvl
+cast(substring() as int)
+concat(str1,str2)
+
+
+val ordersDF = orders.map(order => {
+  (order.split(",")(0).toInt, order.split(",")(1), order.split(",")(2).toInt, order.split(",")(3))
+  }).toDF("order_id","order_date","order_customer_id","order_status")
+
+round(sum(oi.order_item_subtotal),2)
+
+Hive and spark-shell can be used together
+------------------------------------------
+
+hive queries can be executed in spark shell in the following way.
+
+sqlContext.sql("use maruthi_retail_db_orc")
+sqlContext.sql("show tables").show
+
+
+in spark its string.substring(0,2) vs in query it is substr(order_date,0,2)
+
+in spark we can concat strings with '+'
+
+all are functions in sql. Usually we are not using '.'
+
+
+
+
+
 
  
 

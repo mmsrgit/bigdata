@@ -1,0 +1,20 @@
+forgetting group by
+
+In sqoop import to hive query alias for sum column
+
+In sqoop export, specify src in export-dir control argument
+
+--input-fields-terminated-by   in sqoop export
+
+--export-dir instead of --target-dir in sqoop export
+
+spark
+-----
+
+import scala.io.Source
+Source.fromFile will take argument which has value till file
+
+sc.parallelize will take list, but getLines will give iterable. so we need to give "Source.fromFile().getLines.toList"
+
+
+
