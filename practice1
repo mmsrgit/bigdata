@@ -250,7 +250,10 @@ val tuples = singlewords.map(rec => (rec,1))
 *************** reduceByKey has optional argument numpartitions. 
 val wordcount = tuples.reduceByKey((a,b) => a+b,8)
 val wordCountDF = wordcount.toDF("word","count")
-wordCountDF.write.avro("/user/maruthi_rao2000/solutions/five")
+wordCountDF.write.avro("/user/maruthi_rao2000/solutions/five")  
+
+extra code
+
 
 
 
