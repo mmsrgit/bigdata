@@ -453,7 +453,9 @@ spark-submit --class DailyRevenue --master yarn --conf spark.ui.port=14623 /home
 
 
 
- 
+ dbutils.fs.mount(source = "wasbs://ramablob@remystoragesa.blob.core.windows.net", 
+                 mount_point = "/mnt/ramablob", 
+                 extra_configs = {"fs.azure.account.key.remystoragesa.blob.core.windows.net":connectionstring})
 
 
 
